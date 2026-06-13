@@ -1,10 +1,16 @@
 pipeline {
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+    }
+
     environment {
         IMAGE_NAME = 'spring-petclinic'
         IMAGE_TAG = "${BUILD_NUMBER}"
         MAVEN_SETTINGS = '.ci/maven-settings.xml'
+        SMOKE_CONTAINER = 'spring-petclinic-smoke-test'
     }
 
     stages {
@@ -53,12 +59,57 @@ pipeline {
                 sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest .'
             }
         }
+
+        stage('Smoke Test Docker Image') {
+            steps {
+                sh '''
+                    docker rm -f ${SMOKE_CONTAINER} 2>/dev/null || true
+
+                    docker run -d --name ${SMOKE_CONTAINER} ${IMAGE_NAME}:latest
+
+                    echo "Waiting for Spring PetClinic container to become available..."
+
+                    for i in $(seq 1 30); do
+                        if docker run --rm --network container:${SMOKE_CONTAINER} curlimages/curl:8.10.1 -fsS http://localhost:8080 > /dev/null; then
+                            echo "Smoke test passed. Application is reachable on port 8080."
+                            docker rm -f ${SMOKE_CONTAINER}
+                            exit 0
+                        fi
+
+                        echo "Application not ready yet. Retrying..."
+                        sleep 2
+                    done
+
+                    echo "Smoke test failed. Container logs:"
+                    docker logs ${SMOKE_CONTAINER}
+                    docker rm -f ${SMOKE_CONTAINER}
+                    exit 1
+                '''
+            }
+        }
+
+        stage('Export Docker Image') {
+            steps {
+                sh '''
+                    rm -f spring-petclinic-docker-image.tar spring-petclinic-docker-image.tar.gz
+                    docker save ${IMAGE_NAME}:latest -o spring-petclinic-docker-image.tar
+                    gzip spring-petclinic-docker-image.tar
+                '''
+
+                archiveArtifacts artifacts: 'spring-petclinic-docker-image.tar.gz', fingerprint: true
+            }
+        }
     }
 
     post {
-        success {
-            echo "Pipeline completed successfully. Built Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
+        always {
+            sh 'docker rm -f ${SMOKE_CONTAINER} 2>/dev/null || true'
         }
+
+        success {
+            echo "Pipeline completed successfully. Built and exported runnable Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
+        }
+
         failure {
             echo 'Pipeline failed.'
         }
