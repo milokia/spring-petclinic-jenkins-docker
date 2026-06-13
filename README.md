@@ -197,3 +197,11 @@ This project uses `.ci/maven-settings.xml` to configure Maven to resolve depende
 
 ```bash
 ./mvnw -B -s .ci/maven-settings.xml clean package
+
+## Jenkins Validation
+
+The `Jenkinsfile` was validated using a local Jenkins instance running in Docker. The pipeline successfully checked out the repository, resolved Maven dependencies through the configured JCenter mirror, compiled the application, ran tests, packaged the jar, archived the build artifact, and built the Docker image.
+
+For local Jenkins validation, the Jenkins container required access to the host Docker daemon via `/var/run/docker.sock` and the Docker CLI installed in the Jenkins container.
+
+In production I would not run Docker builds directly on the Jenkins controller. I would use a properly configured Jenkins agent with Docker/BuildKit available, or a Kubernetes-based build agent, and push the resulting image to an artifact/container registry.
