@@ -1,0 +1,5 @@
+.git
+.gitignore
+jcenter-compile.log
+*.log
+.DS_Store

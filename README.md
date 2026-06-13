@@ -176,3 +176,24 @@ For additional details, please refer to the blog post [Hello DCO, Goodbye CLA: S
 ## License
 
 The Spring PetClinic sample application is released under version 2.0 of the [Apache License](https://www.apache.org/licenses/LICENSE-2.0).
+
+
+# Spring PetClinic CI/CD Pipeline
+
+This repository contains a CI/CD pipeline implementation for the Spring PetClinic application.
+
+The pipeline compiles the Java application, runs tests, packages the application as a jar, and builds a Docker image that can run the application on port `8080`.
+
+## Requirements
+
+- Java 17+
+- Maven Wrapper, included in the repository as `./mvnw`
+- Docker
+- Jenkins with Docker available on the build agent
+
+## Dependency Resolution
+
+This project uses `.ci/maven-settings.xml` to configure Maven to resolve dependencies through JCenter:
+
+```bash
+./mvnw -B -s .ci/maven-settings.xml clean package
