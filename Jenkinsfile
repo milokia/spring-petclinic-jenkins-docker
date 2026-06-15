@@ -16,13 +16,18 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
+                deleteDir()
                 checkout scm
             }
         }
 
         stage('Prepare') {
             steps {
-                sh 'chmod +x ./mvnw'
+                sh '''
+                    chmod +x ./mvnw
+                    rm -f spring-petclinic-docker-image.tar spring-petclinic-docker-image.tar.gz
+                    rm -rf target/docker-image
+                '''
             }
         }
 
@@ -56,7 +61,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest .'
+                sh 'docker build --platform linux/amd64 -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest .'
             }
         }
 
@@ -91,12 +96,14 @@ pipeline {
         stage('Export Docker Image') {
             steps {
                 sh '''
-                    rm -f spring-petclinic-docker-image.tar spring-petclinic-docker-image.tar.gz
-                    docker save ${IMAGE_NAME}:latest -o spring-petclinic-docker-image.tar
-                    gzip spring-petclinic-docker-image.tar
+                    mkdir -p target/docker-image
+                    rm -f target/docker-image/*.tar target/docker-image/*.tar.gz
+
+                    docker save ${IMAGE_NAME}:latest -o target/docker-image/${IMAGE_NAME}-${IMAGE_TAG}.tar
+                    gzip target/docker-image/${IMAGE_NAME}-${IMAGE_TAG}.tar
                 '''
 
-                archiveArtifacts artifacts: 'spring-petclinic-docker-image.tar.gz', fingerprint: true
+                archiveArtifacts artifacts: 'target/docker-image/*.tar.gz', fingerprint: true
             }
         }
     }

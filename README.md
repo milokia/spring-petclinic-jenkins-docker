@@ -1,6 +1,100 @@
-# Spring PetClinic Sample Application [![Build Status](https://github.com/spring-projects/spring-petclinic/actions/workflows/maven-build.yml/badge.svg)](https://github.com/spring-projects/spring-petclinic/actions/workflows/maven-build.yml)[![Build Status](https://github.com/spring-projects/spring-petclinic/actions/workflows/gradle-build.yml/badge.svg)](https://github.com/spring-projects/spring-petclinic/actions/workflows/gradle-build.yml)
+# Spring PetClinic Sample Jenkins Docker Implementation [![Build Status](https://github.com/spring-projects/spring-petclinic/actions/workflows/maven-build.yml/badge.svg)](https://github.com/spring-projects/spring-petclinic/actions/workflows/maven-build.yml)[![Build Status](https://github.com/spring-projects/spring-petclinic/actions/workflows/gradle-build.yml/badge.svg)](https://github.com/spring-projects/spring-petclinic/actions/workflows/gradle-build.yml)
 
 [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/spring-projects/spring-petclinic) [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=7517918)
+
+# Spring PetClinic CI/CD Pipeline
+
+This repository contains a CI/CD pipeline implementation for the Spring PetClinic application.
+
+The pipeline compiles the Java application, runs tests, packages the application as a runnable Spring Boot jar, builds a Docker image, smoke tests the running container, and exports the Docker image as a `.tar.gz` artifact.
+
+## Requirements
+
+- Java 17+
+- Maven Wrapper, included in the repository as `./mvnw`
+- Docker
+- Jenkins with Docker available on the build agent
+
+## Dependency Resolution
+
+This project uses `.ci/maven-settings.xml` to configure Maven to resolve dependencies through JCenter, as required by the assignment.
+
+```bash
+./mvnw -B -s .ci/maven-settings.xml clean package
+```
+
+In a production implementation, I would not point Jenkins directly to JCenter. I would use JFrog Artifactory as a controlled Maven proxy/cache through a virtual repository. That would provide dependency caching, access control, auditability, and a single controlled source for dependency resolution.
+
+## Building a Container
+
+This assignment adds a `Dockerfile` to the Spring PetClinic project.
+
+The Docker image is built from the Spring Boot jar produced by Maven. The expected local build flow is:
+
+```bash
+./mvnw -B -s .ci/maven-settings.xml -DskipTests package
+docker build -t spring-petclinic:latest .
+```
+
+The `Dockerfile` copies the packaged jar from `target/*.jar` into a Java 17 runtime image and runs it with:
+
+```bash
+java -jar /app/app.jar
+```
+
+The Jenkins pipeline automates this process by compiling the application, running tests, packaging the jar, building the Docker image, smoke testing the running container, and exporting the image as a `.tar.gz` artifact.
+
+## Running the Container Image
+
+After building the image locally, run:
+
+```bash
+docker run --rm -p 8080:8080 spring-petclinic:latest
+```
+
+Then open:
+
+```text
+http://localhost:8080
+```
+
+Or verify from the command line:
+
+```bash
+curl -I http://localhost:8080
+```
+
+## Running the Exported Docker Image Artifact
+
+The Jenkins pipeline exports the runnable Docker image as:
+
+```text
+spring-petclinic-docker-image.tar.gz
+```
+
+To load and run the exported image:
+
+```bash
+gunzip spring-petclinic-docker-image.tar.gz
+docker load -i spring-petclinic-docker-image.tar
+docker run --rm -p 8080:8080 spring-petclinic:latest
+```
+
+## Jenkins Validation
+
+The `Jenkinsfile` was validated using a local Jenkins instance running in Docker. The pipeline successfully checked out the repository, resolved Maven dependencies through the configured JCenter mirror, compiled the application, ran tests, packaged the jar, archived the jar artifact, built the Docker image, smoke tested the running container, exported the Docker image as `spring-petclinic-docker-image.tar.gz`, and archived the exported image artifact.
+
+For local Jenkins validation, the Jenkins container required access to the host Docker daemon via `/var/run/docker.sock` and the Docker CLI installed in the Jenkins container.
+
+In production, I would not run Docker builds directly on the Jenkins controller. I would use a properly configured Jenkins agent with Docker or BuildKit available, or a Kubernetes-based build agent, and push the resulting image to an artifact or container registry.
+
+## Artifactory Integration
+
+There are many areas of improvement that can be For this assignment, Maven is configured to resolve dependencies from JCenter through `.ci/maven-settings.xml`.
+
+In a production implementation, Jenkins would authenticate to JFrog Artifactory and use a Maven virtual repository that proxies JCenter or other external repositories. This would provide caching, access control, auditability, and a single controlled dependency source.
+
+The Docker image could also be tagged and pushed to an Artifactory Docker repository after the image build and smoke test stages. A more complete implementation would publish build-info and integrate with Xray for vulnerability and license scanning before promotion to higher environments.
 
 ## Understanding the Spring Petclinic application with a few diagrams
 
@@ -40,16 +134,69 @@ You can then access the Petclinic at <http://localhost:8080/>.
 You can, of course, run Petclinic in your favorite IDE.
 See below for more details.
 
+## Dependency Resolution
+
+This project uses `.ci/maven-settings.xml` to configure Maven to resolve dependencies through JCenter, as required by the assignment.
+
+```bash
+./mvnw -B -s .ci/maven-settings.xml clean package
+```
+
+In a production implementation, I would not point Jenkins directly to JCenter. I would use JFrog Artifactory as a controlled Maven proxy/cache through a virtual repository. That would provide dependency caching, access control, auditability, and a single controlled source for dependency resolution.
+
 ## Building a Container
 
-There is no `Dockerfile` in this project. You can build a container image (if you have a docker daemon) using the Spring Boot build plugin:
+This assignment adds a `Dockerfile` to the Spring PetClinic project.
+
+The Docker image is built from the Spring Boot jar produced by Maven. The expected local build flow is:
+
+```bash
+./mvnw -B -s .ci/maven-settings.xml -DskipTests package
+docker build -t spring-petclinic:latest .
+```
+
+The `Dockerfile` copies the packaged jar from `target/*.jar` into a Java 17 runtime image and runs it with:
+
+```bash
+java -jar /app/app.jar
+```
+
+The Jenkins pipeline automates this process by compiling the application, running tests, packaging the jar, building the Docker image, smoke testing the running container, and exporting the image as a `.tar.gz` artifact.
 
 ## Running the Container Image
 
+After building the image locally, run:
+
 ```bash
-./mvnw spring-boot:build-image
-docker images | grep petclinic
-docker run -p 8080:8080 docker.io/library/spring-petclinic:latest
+docker run --rm -p 8080:8080 spring-petclinic:latest
+```
+
+Then open:
+
+```text
+http://localhost:8080
+```
+
+Or verify from the command line:
+
+```bash
+curl -I http://localhost:8080
+```
+
+## Running the Exported Docker Image Artifact
+
+The Jenkins pipeline exports the runnable Docker image as:
+
+```text
+spring-petclinic-docker-image.tar.gz
+```
+
+To load and run the exported image:
+
+```bash
+gunzip spring-petclinic-docker-image.tar.gz
+docker load -i spring-petclinic-docker-image.tar
+docker run --rm -p 8080:8080 spring-petclinic:latest
 ```
 
 ## In case you find a bug/suggested improvement for Spring Petclinic
@@ -177,31 +324,3 @@ For additional details, please refer to the blog post [Hello DCO, Goodbye CLA: S
 
 The Spring PetClinic sample application is released under version 2.0 of the [Apache License](https://www.apache.org/licenses/LICENSE-2.0).
 
-
-# Spring PetClinic CI/CD Pipeline
-
-This repository contains a CI/CD pipeline implementation for the Spring PetClinic application.
-
-The pipeline compiles the Java application, runs tests, packages the application as a jar, and builds a Docker image that can run the application on port `8080`.
-
-## Requirements
-
-- Java 17+
-- Maven Wrapper, included in the repository as `./mvnw`
-- Docker
-- Jenkins with Docker available on the build agent
-
-## Dependency Resolution
-
-This project uses `.ci/maven-settings.xml` to configure Maven to resolve dependencies through JCenter:
-
-```bash
-./mvnw -B -s .ci/maven-settings.xml clean package
-
-## Jenkins Validation
-
-The `Jenkinsfile` was validated using a local Jenkins instance running in Docker. The pipeline successfully checked out the repository, resolved Maven dependencies through the configured JCenter mirror, compiled the application, ran tests, packaged the jar, archived the build artifact, and built the Docker image.
-
-For local Jenkins validation, the Jenkins container required access to the host Docker daemon via `/var/run/docker.sock` and the Docker CLI installed in the Jenkins container.
-
-In production I would not run Docker builds directly on the Jenkins controller. I would use a properly configured Jenkins agent with Docker/BuildKit available, or a Kubernetes-based build agent, and push the resulting image to an artifact/container registry.
